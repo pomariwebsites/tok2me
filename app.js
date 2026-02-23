@@ -1,0 +1,634 @@
+// App State
+let currentUser = null;
+let currentChatId = null;
+let eventSource = null;
+let isFabMenuOpen = false;
+
+// DOM Elements
+const authContainer = document.getElementById('auth-container');
+const chatContainer = document.getElementById('chat-container');
+const historyContainer = document.getElementById('history-container');
+const messagesArea = document.getElementById('messages-area');
+const messageInput = document.getElementById('message-input');
+const usernameDisplay = document.getElementById('username-display');
+const menuToggle = document.getElementById('menu-toggle');
+const closeSidebar = document.getElementById('close-sidebar');
+const sidebar = document.getElementById('sidebar');
+const fabContainer = document.getElementById('fabContainer');
+const fabIcon = document.getElementById('fabIcon');
+
+// Suggestion chips array for dynamic updates
+const suggestionChips = [
+    { icon: 'chart-line', text: 'Business Strategy', action: 'Analyze my business strategy' },
+    { icon: 'brain', text: 'Personal Growth', action: 'Help me with personal development' },
+    { icon: 'bullseye', text: 'Marketing Plan', action: 'Create a marketing plan' },
+    { icon: 'chart-pie', text: 'Market Analysis', action: 'Analyze market trends' },
+    { icon: 'users', text: 'Team Building', action: 'Improve team productivity' },
+    { icon: 'rocket', text: 'Startup Advice', action: 'Give me startup advice' },
+    { icon: 'chart-bar', text: 'Financial Analysis', action: 'Analyze my finances' },
+    { icon: 'clock', text: 'Time Management', action: 'Help with time management' }
+];
+
+// Check for existing session
+async function checkAuth() {
+    try {
+        const response = await fetch('/api/user');
+        if (response.ok) {
+            const user = await response.json();
+            currentUser = user;
+            usernameDisplay.textContent = user.username;
+            showChatInterface();
+            loadChatHistory();
+            updateSuggestionChips();
+        }
+    } catch (error) {
+        console.log('Not authenticated');
+    }
+}
+
+// Auth functions
+async function login() {
+    const username = document.getElementById('login-username').value;
+    const password = document.getElementById('login-password').value;
+    
+    if (!username || !password) {
+        showNotification('Please fill in all fields', 'error');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password })
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            currentUser = { username: data.user };
+            usernameDisplay.textContent = data.user;
+            showChatInterface();
+            loadChatHistory();
+            updateSuggestionChips();
+            showNotification('Login successful!', 'success');
+        } else {
+            const error = await response.text();
+            showNotification(error || 'Login failed', 'error');
+        }
+    } catch (error) {
+        showNotification('Network error. Please try again.', 'error');
+    }
+}
+
+async function register() {
+    const username = document.getElementById('reg-username').value;
+    const email = document.getElementById('reg-email').value;
+    const password = document.getElementById('reg-password').value;
+    
+    if (!username || !email || !password) {
+        showNotification('Please fill in all fields', 'error');
+        return;
+    }
+    
+    if (password.length < 6) {
+        showNotification('Password must be at least 6 characters', 'error');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, email, password })
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            currentUser = { username: data.user };
+            usernameDisplay.textContent = data.user;
+            showChatInterface();
+            loadChatHistory();
+            updateSuggestionChips();
+            showNotification('Registration successful!', 'success');
+        } else {
+            const error = await response.text();
+            showNotification(error || 'Registration failed', 'error');
+        }
+    } catch (error) {
+        showNotification('Network error. Please try again.', 'error');
+    }
+}
+
+async function logout() {
+    try {
+        await fetch('/api/logout', { method: 'POST' });
+        currentUser = null;
+        currentChatId = null;
+        showAuthInterface();
+        closeFabMenu();
+        showNotification('Logged out successfully', 'info');
+    } catch (error) {
+        console.error('Logout error:', error);
+    }
+}
+
+// UI functions
+function showAuthInterface() {
+    authContainer.classList.remove('hidden');
+    chatContainer.classList.add('hidden');
+    historyContainer.classList.add('hidden');
+    if (fabContainer) fabContainer.style.display = 'none';
+}
+
+function showChatInterface() {
+    authContainer.classList.add('hidden');
+    chatContainer.classList.remove('hidden');
+    historyContainer.classList.add('hidden');
+    if (fabContainer) fabContainer.style.display = 'flex';
+}
+
+function showLogin() {
+    document.getElementById('login-form').classList.remove('hidden');
+    document.getElementById('register-form').classList.add('hidden');
+}
+
+function showRegister() {
+    document.getElementById('login-form').classList.add('hidden');
+    document.getElementById('register-form').classList.remove('hidden');
+}
+
+function showNewChat() {
+    currentChatId = null;
+    messagesArea.innerHTML = `
+        <div class="text-center mb-8 mt-4 float-animation">
+            <div class="w-24 h-24 gradient-bg rounded-full flex items-center justify-center mx-auto mb-4">
+                <i class="fas fa-robot text-4xl text-white"></i>
+            </div>
+            <h1 class="text-4xl font-bold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent">Welcome to TOK2ME</h1>
+            <p class="text-gray-600 mt-2 text-lg">Your AI business and personal analysis assistant</p>
+            <p class="text-gray-500 mt-1">How can I help you today?</p>
+        </div>
+    `;
+    showChatInterface();
+    updateSuggestionChips();
+    
+    // Close mobile sidebar if open
+    if (window.innerWidth < 768) {
+        sidebar.classList.add('-translate-x-full');
+    }
+    
+    // Close FAB menu
+    closeFabMenu();
+}
+
+async function showChatHistory() {
+    historyContainer.classList.remove('hidden');
+    chatContainer.classList.add('hidden');
+    authContainer.classList.add('hidden');
+    if (fabContainer) fabContainer.style.display = 'none';
+    
+    try {
+        const response = await fetch('/api/chats');
+        const chats = await response.json();
+        
+        const historyList = document.getElementById('history-list');
+        
+        if (!chats || chats.length === 0) {
+            historyList.innerHTML = `
+                <div class="text-center py-12">
+                    <div class="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <i class="fas fa-history text-4xl text-gray-400"></i>
+                    </div>
+                    <h3 class="text-xl font-semibold text-gray-700 mb-2">No chat history yet</h3>
+                    <p class="text-gray-500 mb-4">Start a new conversation to see it here</p>
+                    <button onclick="showNewChat()" class="px-6 py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-xl hover:shadow-lg transition-all duration-300">
+                        <i class="fas fa-plus mr-2"></i>Start New Chat
+                    </button>
+                </div>
+            `;
+            return;
+        }
+        
+        historyList.innerHTML = '';
+        
+        chats.forEach(chat => {
+            const chatElement = document.createElement('div');
+            chatElement.className = 'bg-white rounded-xl shadow-md p-5 hover:shadow-xl transition-all duration-300 border border-gray-100 group';
+            chatElement.innerHTML = `
+                <div class="flex justify-between items-center">
+                    <div onclick="loadChat(${chat.id})" class="flex-1 cursor-pointer">
+                        <div class="flex items-center mb-2">
+                            <i class="fas fa-comments text-green-500 mr-2"></i>
+                            <h3 class="font-semibold text-lg text-gray-800">${chat.title || 'New Conversation'}</h3>
+                        </div>
+                        <p class="text-sm text-gray-500 flex items-center">
+                            <i class="far fa-clock mr-1"></i>
+                            ${new Date(chat.created_at).toLocaleString()} 
+                            <span class="mx-2">•</span> 
+                            <i class="far fa-comment mr-1"></i>
+                            ${chat.message_count || 0} messages
+                        </p>
+                    </div>
+                    <button onclick="deleteChat(${chat.id})" class="text-red-500 hover:text-red-600 ml-4 w-10 h-10 rounded-full hover:bg-red-50 flex items-center justify-center transition-all duration-300 opacity-0 group-hover:opacity-100">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            `;
+            historyList.appendChild(chatElement);
+        });
+    } catch (error) {
+        console.error('Error loading chat history:', error);
+        showNotification('Failed to load chat history', 'error');
+    }
+}
+
+async function loadChat(chatId) {
+    try {
+        showLoading();
+        
+        const response = await fetch(`/api/chat/${chatId}`);
+        const messages = await response.json();
+        
+        currentChatId = chatId;
+        messagesArea.innerHTML = '';
+        
+        if (messages && messages.length > 0) {
+            messages.forEach(msg => {
+                appendMessage(msg.role, msg.content);
+            });
+        } else {
+            messagesArea.innerHTML = `
+                <div class="text-center py-12">
+                    <i class="fas fa-comments text-6xl text-gray-300 mb-4"></i>
+                    <p class="text-gray-500">No messages in this chat</p>
+                </div>
+            `;
+        }
+        
+        showChatInterface();
+        hideLoading();
+        
+        // Close mobile sidebar if open
+        if (window.innerWidth < 768) {
+            sidebar.classList.add('-translate-x-full');
+        }
+    } catch (error) {
+        console.error('Error loading chat:', error);
+        showNotification('Failed to load chat', 'error');
+        hideLoading();
+    }
+}
+
+async function deleteChat(chatId) {
+    if (confirm('Are you sure you want to delete this chat?')) {
+        try {
+            await fetch(`/api/chat/${chatId}`, { method: 'DELETE' });
+            showNotification('Chat deleted successfully', 'success');
+            showChatHistory();
+        } catch (error) {
+            console.error('Error deleting chat:', error);
+            showNotification('Failed to delete chat', 'error');
+        }
+    }
+}
+
+// Message functions
+function appendMessage(role, content) {
+    const messageDiv = document.createElement('div');
+    messageDiv.className = `flex mb-4 message-enter ${role === 'user' ? 'justify-end' : 'justify-start'}`;
+    
+    if (role === 'user') {
+        messageDiv.innerHTML = `
+            <div class="message-bubble-user">
+                <p class="text-white">${escapeHtml(content)}</p>
+                <span class="text-xs text-green-100 block mt-1">${getCurrentTime()}</span>
+            </div>
+        `;
+    } else {
+        messageDiv.innerHTML = `
+            <div class="flex items-start max-w-[70%]">
+                <div class="w-8 h-8 rounded-full bg-gradient-to-r from-green-500 to-emerald-600 flex items-center justify-center text-white mr-3 shadow-md flex-shrink-0">
+                    <i class="fas fa-robot text-sm"></i>
+                </div>
+                <div class="message-bubble-ai">
+                    <div class="text-gray-800 prose prose-sm max-w-none">${formatAIResponse(escapeHtml(content))}</div>
+                    <span class="text-xs text-gray-500 block mt-2">${getCurrentTime()}</span>
+                </div>
+            </div>
+        `;
+    }
+    
+    messagesArea.appendChild(messageDiv);
+    messagesArea.scrollTop = messagesArea.scrollHeight;
+}
+
+function showTypingIndicator() {
+    const indicator = document.createElement('div');
+    indicator.id = 'typing-indicator';
+    indicator.className = 'flex mb-4 message-enter';
+    indicator.innerHTML = `
+        <div class="flex items-start">
+            <div class="w-8 h-8 rounded-full bg-gradient-to-r from-green-500 to-emerald-600 flex items-center justify-center text-white mr-3 shadow-md">
+                <i class="fas fa-robot text-sm"></i>
+            </div>
+            <div class="typing-indicator">
+                <div class="typing-dot"></div>
+                <div class="typing-dot"></div>
+                <div class="typing-dot"></div>
+            </div>
+        </div>
+    `;
+    messagesArea.appendChild(indicator);
+    messagesArea.scrollTop = messagesArea.scrollHeight;
+}
+
+function removeTypingIndicator() {
+    const indicator = document.getElementById('typing-indicator');
+    if (indicator) {
+        indicator.remove();
+    }
+}
+
+async function sendMessage() {
+    const message = messageInput.value.trim();
+    if (!message) return;
+    
+    // Clear input
+    messageInput.value = '';
+    
+    // Add user message to UI
+    appendMessage('user', message);
+    
+    // Show typing indicator
+    showTypingIndicator();
+    
+    try {
+        const response = await fetch('/api/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                message: message,
+                chatId: currentChatId
+            })
+        });
+        
+        if (!response.ok) {
+            throw new Error('Failed to send message');
+        }
+        
+        const data = await response.json();
+        
+        // Remove typing indicator
+        removeTypingIndicator();
+        
+        // Add AI response
+        appendMessage('assistant', data.response);
+        
+        // Update current chat ID if new chat
+        if (data.chatId) {
+            currentChatId = data.chatId;
+        }
+        
+        // Close FAB menu after sending
+        closeFabMenu();
+        
+    } catch (error) {
+        console.error('Error sending message:', error);
+        removeTypingIndicator();
+        
+        // Show error message
+        const errorDiv = document.createElement('div');
+        errorDiv.className = 'flex mb-4 message-enter';
+        errorDiv.innerHTML = `
+            <div class="flex items-start">
+                <div class="w-8 h-8 rounded-full bg-red-500 flex items-center justify-center text-white mr-3">
+                    <i class="fas fa-exclamation-triangle text-sm"></i>
+                </div>
+                <div class="bg-red-100 text-red-700 rounded-lg py-2 px-4 max-w-[70%]">
+                    Failed to send message. Please try again.
+                </div>
+            </div>
+        `;
+        messagesArea.appendChild(errorDiv);
+        messagesArea.scrollTop = messagesArea.scrollHeight;
+    }
+}
+
+function handleKeyPress(event) {
+    if (event.key === 'Enter' && !event.shiftKey) {
+        event.preventDefault();
+        sendMessage();
+    }
+}
+
+// FAB Menu functions
+function toggleFabMenu() {
+    if (!fabContainer || !fabIcon) return;
+    
+    isFabMenuOpen = !isFabMenuOpen;
+    fabContainer.classList.toggle('active');
+    
+    if (isFabMenuOpen) {
+        fabIcon.classList.remove('fa-plus');
+        fabIcon.classList.add('fa-times');
+    } else {
+        fabIcon.classList.remove('fa-times');
+        fabIcon.classList.add('fa-plus');
+    }
+}
+
+function closeFabMenu() {
+    if (!fabContainer || !fabIcon) return;
+    
+    isFabMenuOpen = false;
+    fabContainer.classList.remove('active');
+    fabIcon.classList.remove('fa-times');
+    fabIcon.classList.add('fa-plus');
+}
+
+function useSuggestion(suggestion) {
+    messageInput.value = suggestion;
+    sendMessage();
+    closeFabMenu();
+}
+
+// Update suggestion chips based on user preferences or context
+function updateSuggestionChips() {
+    // This could be dynamic based on user history or preferences
+    const suggestionRow = document.querySelector('.flex.space-x-3');
+    if (!suggestionRow) return;
+    
+    // Clear existing chips
+    suggestionRow.innerHTML = '';
+    
+    // Add first 5 suggestion chips
+    suggestionChips.slice(0, 5).forEach(chip => {
+        const button = document.createElement('button');
+        button.className = 'suggestion-chip flex items-center';
+        button.setAttribute('onclick', `useSuggestion('${chip.action}')`);
+        button.innerHTML = `
+            <i class="fas fa-${chip.icon} mr-2"></i>${chip.text}
+        `;
+        suggestionRow.appendChild(button);
+    });
+}
+
+// Utility functions
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function formatAIResponse(text) {
+    // Convert markdown-style formatting
+    return text
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.*?)\*/g, '<em>$1</em>')
+        .replace(/`(.*?)`/g, '<code class="bg-gray-100 px-1 rounded">$1</code>')
+        .replace(/\n/g, '<br>');
+}
+
+function getCurrentTime() {
+    const now = new Date();
+    return now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+function showLoading() {
+    // Add loading overlay or indicator
+    const loadingDiv = document.createElement('div');
+    loadingDiv.id = 'loading-overlay';
+    loadingDiv.className = 'fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center';
+    loadingDiv.innerHTML = `
+        <div class="bg-white rounded-xl p-6 shadow-xl">
+            <div class="w-12 h-12 border-4 border-green-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
+            <p class="mt-4 text-gray-600">Loading...</p>
+        </div>
+    `;
+    document.body.appendChild(loadingDiv);
+}
+
+function hideLoading() {
+    const loadingDiv = document.getElementById('loading-overlay');
+    if (loadingDiv) {
+        loadingDiv.remove();
+    }
+}
+
+function showNotification(message, type = 'info') {
+    // Create notification element
+    const notification = document.createElement('div');
+    notification.className = `fixed top-20 right-4 z-50 px-6 py-3 rounded-xl shadow-lg transform transition-all duration-500 translate-x-full ${
+        type === 'success' ? 'bg-green-500' :
+        type === 'error' ? 'bg-red-500' :
+        type === 'warning' ? 'bg-yellow-500' :
+        'bg-blue-500'
+    } text-white`;
+    
+    notification.innerHTML = `
+        <div class="flex items-center">
+            <i class="fas ${
+                type === 'success' ? 'fa-check-circle' :
+                type === 'error' ? 'fa-exclamation-circle' :
+                type === 'warning' ? 'fa-exclamation-triangle' :
+                'fa-info-circle'
+            } mr-3"></i>
+            <span>${message}</span>
+        </div>
+    `;
+    
+    document.body.appendChild(notification);
+    
+    // Animate in
+    setTimeout(() => {
+        notification.classList.remove('translate-x-full');
+    }, 100);
+    
+    // Remove after 3 seconds
+    setTimeout(() => {
+        notification.classList.add('translate-x-full');
+        setTimeout(() => {
+            notification.remove();
+        }, 500);
+    }, 3000);
+}
+
+// Event listeners
+menuToggle?.addEventListener('click', () => {
+    sidebar.classList.remove('-translate-x-full');
+});
+
+closeSidebar?.addEventListener('click', () => {
+    sidebar.classList.add('-translate-x-full');
+});
+
+// Close sidebar when clicking outside on mobile
+document.addEventListener('click', (e) => {
+    if (window.innerWidth < 768 && 
+        sidebar && 
+        !sidebar.contains(e.target) && 
+        menuToggle && 
+        !menuToggle.contains(e.target)) {
+        sidebar.classList.add('-translate-x-full');
+    }
+});
+
+// Close FAB menu when clicking outside
+document.addEventListener('click', (event) => {
+    if (fabContainer && !fabContainer.contains(event.target) && isFabMenuOpen) {
+        closeFabMenu();
+    }
+});
+
+// Handle escape key
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        if (isFabMenuOpen) {
+            closeFabMenu();
+        }
+        if (window.innerWidth < 768 && sidebar) {
+            sidebar.classList.add('-translate-x-full');
+        }
+    }
+});
+
+// Logout buttons
+document.querySelectorAll('#logout-btn-sidebar, #logout-btn-desktop').forEach(btn => {
+    btn?.addEventListener('click', logout);
+});
+
+// Initialize on load
+document.addEventListener('DOMContentLoaded', () => {
+    checkAuth();
+    
+    // Add focus effect to input
+    if (messageInput) {
+        messageInput.addEventListener('focus', () => {
+            messageInput.classList.add('ring-2', 'ring-green-500', 'ring-opacity-50');
+        });
+        messageInput.addEventListener('blur', () => {
+            messageInput.classList.remove('ring-2', 'ring-green-500', 'ring-opacity-50');
+        });
+    }
+});
+
+// Export functions for global use
+window.login = login;
+window.register = register;
+window.logout = logout;
+window.showLogin = showLogin;
+window.showRegister = showRegister;
+window.showNewChat = showNewChat;
+window.showChatHistory = showChatHistory;
+window.loadChat = loadChat;
+window.deleteChat = deleteChat;
+window.sendMessage = sendMessage;
+window.handleKeyPress = handleKeyPress;
+window.toggleFabMenu = toggleFabMenu;
+window.useSuggestion = useSuggestion;
+window.clearHistory = () => {
+    if (confirm('Are you sure you want to clear all chat history?')) {
+        // Implement clear all chats functionality
+        showNotification('Coming soon!', 'info');
+    }
+};
