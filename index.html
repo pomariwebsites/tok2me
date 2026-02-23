@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>TOK2ME - AI Business & Personal Analyst</title>
+    <meta name="description" content="TOK2ME - Your AI business and personal analysis assistant">
+    <meta name="theme-color" content="#10a37f">
+    
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="/manifest.json">
+    
+    <!-- Apple Touch Icon -->
+    <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
+    
+    <!-- Tailwind CSS via CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        /* Custom animations */
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .app-start-animation {
+            animation: slideUp 0.5s ease-out;
+        }
+        
+        .message-enter {
+            animation: slideUp 0.3s ease-out;
+        }
+        
+        .skeleton-pulse {
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+        
+        /* Loading skeleton styles */
+        .skeleton {
+            background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+            background-size: 200% 100%;
+            animation: loading 1.5s infinite;
+        }
+        
+        @keyframes loading {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+        
+        /* Smooth scrolling */
+        .smooth-scroll {
+            scroll-behavior: smooth;
+        }
+        
+        /* Hide scrollbar for chat but keep functionality */
+        .hide-scrollbar {
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+        }
+        
+        .hide-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        
+        /* Mobile optimizations */
+        @media (max-width: 640px) {
+            .chat-container {
+                height: calc(100vh - 120px);
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-50 font-sans antialiased">
+    <!-- App Start Animation Overlay -->
+    <div id="splash-screen" class="fixed inset-0 bg-gradient-to-br from-green-500 to-emerald-600 z-50 flex items-center justify-center transition-opacity duration-500">
+        <div class="text-center text-white app-start-animation">
+            <div class="text-6xl font-bold mb-4">TOK2ME</div>
+            <div class="text-xl opacity-90 mb-8">Your AI Business & Personal Analyst</div>
+            <div class="w-16 h-16 border-4 border-white border-t-transparent rounded-full animate-spin mx-auto"></div>
+        </div>
+    </div>
+
+    <!-- Main App Container -->
+    <div id="app" class="hidden">
+        <!-- Navigation Bar -->
+        <nav class="bg-white shadow-sm fixed top-0 left-0 right-0 z-10">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex justify-between h-16">
+                    <div class="flex items-center">
+                        <button id="menu-toggle" class="text-gray-600 hover:text-gray-900 focus:outline-none md:hidden">
+                            <i class="fas fa-bars text-2xl"></i>
+                        </button>
+                        <div class="ml-4 text-xl font-bold text-green-600">TOK2ME</div>
+                    </div>
+                    
+                    <!-- Desktop Menu -->
+                    <div class="hidden md:flex items-center space-x-4">
+                        <button class="px-3 py-2 text-gray-600 hover:text-gray-900" onclick="showNewChat()">
+                            <i class="fas fa-plus mr-2"></i>New Chat
+                        </button>
+                        <button class="px-3 py-2 text-gray-600 hover:text-gray-900" onclick="showChatHistory()">
+                            <i class="fas fa-history mr-2"></i>History
+                        </button>
+                        <button id="user-menu-button" class="flex items-center space-x-2 text-gray-600 hover:text-gray-900">
+                            <i class="fas fa-user-circle text-2xl"></i>
+                            <span id="username-display"></span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Sidebar (Mobile) -->
+        <div id="sidebar" class="fixed inset-y-0 left-0 transform -translate-x-full transition-transform duration-300 ease-in-out bg-white w-64 shadow-lg z-20 md:hidden">
+            <div class="p-4">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-xl font-bold text-green-600">Menu</h2>
+                    <button id="close-sidebar" class="text-gray-600 hover:text-gray-900">
+                        <i class="fas fa-times text-2xl"></i>
+                    </button>
+                </div>
+                <div class="space-y-4">
+                    <button class="w-full text-left px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600" onclick="showNewChat()">
+                        <i class="fas fa-plus mr-2"></i>New Chat
+                    </button>
+                    <button class="w-full text-left px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg" onclick="showChatHistory()">
+                        <i class="fas fa-history mr-2"></i>History
+                    </button>
+                    <hr>
+                    <button id="logout-btn-sidebar" class="w-full text-left px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg">
+                        <i class="fas fa-sign-out-alt mr-2"></i>Logout
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content Area -->
+        <main class="pt-16">
+            <!-- Auth Container (shown when not logged in) -->
+            <div id="auth-container" class="max-w-md mx-auto mt-10 px-4">
+                <div class="bg-white rounded-lg shadow-md p-6 app-start-animation">
+                    <h2 class="text-2xl font-bold text-center mb-6">Welcome to TOK2ME</h2>
+                    
+                    <!-- Login Form -->
+                    <div id="login-form" class="space-y-4">
+                        <input type="text" id="login-username" placeholder="Username" class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500">
+                        <input type="password" id="login-password" placeholder="Password" class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500">
+                        <button onclick="login()" class="w-full bg-green-500 text-white py-2 rounded-lg hover:bg-green-600 transition">
+                            Login
+                        </button>
+                        <p class="text-center text-gray-600">
+                            Don't have an account? 
+                            <button onclick="showRegister()" class="text-green-500 hover:text-green-600">Register</button>
+                        </p>
+                    </div>
+                    
+                    <!-- Register Form (hidden by default) -->
+                    <div id="register-form" class="space-y-4 hidden">
+                        <input type="text" id="reg-username" placeholder="Username" class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500">
+                        <input type="email" id="reg-email" placeholder="Email" class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500">
+                        <input type="password" id="reg-password" placeholder="Password" class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500">
+                        <button onclick="register()" class="w-full bg-green-500 text-white py-2 rounded-lg hover:bg-green-600 transition">
+                            Register
+                        </button>
+                        <p class="text-center text-gray-600">
+                            Already have an account? 
+                            <button onclick="showLogin()" class="text-green-500 hover:text-green-600">Login</button>
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Chat Container (hidden when not logged in) -->
+            <div id="chat-container" class="hidden max-w-7xl mx-auto px-4 h-screen flex flex-col">
+                <!-- Chat Messages Area -->
+                <div id="messages-area" class="flex-1 overflow-y-auto py-4 hide-scrollbar smooth-scroll">
+                    <!-- Welcome Message -->
+                    <div class="text-center mb-8 mt-4">
+                        <h1 class="text-3xl font-bold text-gray-800">Welcome to TOK2ME</h1>
+                        <p class="text-gray-600 mt-2">Your AI business and personal analysis assistant</p>
+                    </div>
+                    
+                    <!-- Messages will be inserted here -->
+                </div>
+
+                <!-- Chat Input Area -->
+                <div class="border-t bg-white py-4">
+                    <div class="flex items-center space-x-2">
+                        <input type="text" id="message-input" placeholder="Ask me anything about business, personal development, or any field..." 
+                               class="flex-1 px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                               onkeypress="handleKeyPress(event)">
+                        <button onclick="sendMessage()" class="bg-green-500 text-white px-6 py-3 rounded-lg hover:bg-green-600 transition">
+                            <i class="fas fa-paper-plane"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Chat History Container (hidden by default) -->
+            <div id="history-container" class="hidden max-w-4xl mx-auto mt-6 px-4">
+                <h2 class="text-2xl font-bold mb-4">Chat History</h2>
+                <div id="history-list" class="space-y-3">
+                    <!-- History items will be inserted here -->
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Loading Skeleton Template -->
+    <template id="message-skeleton">
+        <div class="flex mb-4 message-enter">
+            <div class="w-8 h-8 rounded-full bg-gray-300 skeleton-pulse mr-3"></div>
+            <div class="flex-1">
+                <div class="h-4 bg-gray-300 skeleton-pulse rounded w-1/4 mb-2"></div>
+                <div class="space-y-2">
+                    <div class="h-4 bg-gray-300 skeleton-pulse rounded w-3/4"></div>
+                    <div class="h-4 bg-gray-300 skeleton-pulse rounded w-1/2"></div>
+                    <div class="h-4 bg-gray-300 skeleton-pulse rounded w-2/3"></div>
+                </div>
+            </div>
+        </div>
+    </template>
+
+    <script src="/static/js/app.js"></script>
+    <script src="/static/js/chat.js"></script>
+    
+    <script>
+        // Hide splash screen after animation
+        window.addEventListener('load', function() {
+            setTimeout(function() {
+                document.getElementById('splash-screen').style.opacity = '0';
+                setTimeout(function() {
+                    document.getElementById('splash-screen').classList.add('hidden');
+                    document.getElementById('app').classList.remove('hidden');
+                }, 500);
+            }, 2000);
+        });
+        
+        // Register Service Worker
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/sw.js')
+                .then(reg => console.log('Service Worker registered'))
+                .catch(err => console.log('Service Worker registration failed: ', err));
+        }
+    </script>
+</body>
+</html>
